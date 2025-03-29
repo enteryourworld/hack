@@ -8,7 +8,11 @@ interface INavListItem {
 	href: string
 }
 
-const Navigation = () => {
+interface IProps {
+	className?: string
+}
+
+const Navigation = ({ className }: IProps) => {
 	const list: INavListItem[] = [
 		{
 			text: 'Главная',
@@ -34,7 +38,7 @@ const Navigation = () => {
 
 	return (
 		<nav className={hstack({ fontSize: 'common' })}>
-			<ul className={hstack({ gap: '30px', color: 'primary' })}>
+			<ul className={className}>
 				{list.map((e, i) => (
 					<li key={e.text + i}>
 						<Link href={e.href}>{e.text}</Link>

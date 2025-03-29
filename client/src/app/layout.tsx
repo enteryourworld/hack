@@ -7,6 +7,8 @@ import '@/shared/styles/globals.css'
 
 import { container } from '../../styled-system/patterns'
 
+import Footer from '@/widgets/sections/ui/Footer'
+
 const roboto = Montserrat({
 	variable: '--font-montserrat',
 	subsets: ['cyrillic']
@@ -28,6 +30,7 @@ export default function RootLayout({
 				<div className={container()}>
 					<Header />
 					<main>{children}</main>
+					<Footer />
 				</div>
 			</body>
 		</html>

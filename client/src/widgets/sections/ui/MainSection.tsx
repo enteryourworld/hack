@@ -1,3 +1,5 @@
+'use client'
+
 import { MoveRight } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -7,13 +9,16 @@ import { css } from '../../../../styled-system/css'
 import { hstack, vstack } from '../../../../styled-system/patterns'
 
 import BG from '@/../public/images/main-section-bkg.jpg'
+import { useScreenSize } from '@/hooks/screenSize'
 
 const MainSection = () => {
+	const screenSize = useScreenSize()
+
 	return (
 		<section
 			className={css({
 				background: 'primary',
-				padding: '80px 60px 50px',
+				padding: screenSize.width > 870 ? '80px 60px 50px' : '40px 30px 25px',
 				marginBottom: 'between_section'
 			})}
 		>
@@ -25,11 +30,22 @@ const MainSection = () => {
 				})}
 			>
 				<div
-					className={hstack({ width: '100%', justifyContent: 'space-between' })}
+					className={
+						screenSize.width > 870
+							? hstack({ width: '100%', justifyContent: 'space-between' })
+							: vstack({ alignItems: 'center', width: '100%' })
+					}
 				>
 					<h2
 						className={css({
-							fontSize: 'large',
+							fontSize:
+								screenSize.width > 1200
+									? 'large'
+									: screenSize.width > 870
+										? '36px'
+										: screenSize.width > 650
+											? 'medium'
+											: 'common',
 							textAlign: 'center',
 							fontWeight: 'medium'
 						})}
@@ -40,7 +56,11 @@ const MainSection = () => {
 						<br />
 						бизнеса!
 					</h2>
-					<Image src={BG} alt={'backround'} width={740} />
+					<Image
+						src={BG}
+						alt={'backround'}
+						className={css({ width: screenSize.width > 870 ? '55%' : '70%' })}
+					/>
 				</div>
 				<Link
 					href={'/tarifs'}

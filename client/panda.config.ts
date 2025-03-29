@@ -1,3 +1,4 @@
+import BG from '/../public/images/paperwork.jpg'
 import { defineConfig } from '@pandacss/dev'
 
 export default defineConfig({
@@ -19,11 +20,17 @@ export default defineConfig({
 					secondary: { value: '#000000' },
 					bkg: { value: '#35477D' },
 					bkg_second: { value: '#ED3B4E' },
-					bkg_light: { value: '#8BA2E9' }
+					bkg_light: { value: '#8BA2E9' },
+					gray: { value: 'rgba(192, 192, 192, 1)' },
+					grayLight: { value: 'rgb(207, 207, 207)' },
+					blue: { value: 'rgba(86, 128, 255, 1)' }
 				},
 				fontSizes: {
 					common: { value: '18px' },
-					large: { value: '58px' }
+					large: { value: '58px' },
+					medium: { value: '24px' },
+					big: { value: '32px' },
+					small: { value: '14px' }
 				},
 				spacing: {
 					between_section: { value: '100px' }
@@ -44,7 +51,7 @@ export default defineConfig({
 	},
 	globalCss: {
 		body: {
-			bg: 'bkg'
+			backgroundColor: 'bkg'
 		}
 	},
 
