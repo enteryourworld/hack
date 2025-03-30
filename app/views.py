@@ -1,64 +1,108 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
+from django.shortcuts import render
 import requests
-import uuid
-import base64
-from .serializers import TokenRequestSerializer, ChatCompletionSerializer
+import json
+from django.conf import settings
+from urllib.parse import quote
+import certifi
+import os
+from urllib3.exceptions import InsecureRequestWarning
 
-class GetTokenView(APIView):
-    def post(self, request):
-        serializer = TokenRequestSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        client_id = serializer.validated_data['client_id']
-        client_secret = serializer.validated_data['client_secret']
-        scope = serializer.validated_data.get('scope', 'GIGACHAT_API_PERS')
-        
-        auth_string = f"{client_id}:{client_secret}"
-        base64_auth = base64.b64encode(auth_string.encode()).decode()
-        
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Accept': 'application/json',
-            'RqUID': str(uuid.uuid4()),
-            'Authorization': f'Basic {base64_auth}'
-        }
-        
-        try:
-            response = requests.post(
-                'https://ngw.devices.sberbank.ru:9443/api/v2/oauth',
-                headers=headers,
-                data={'scope': scope},
-                verify=False  # Для тестов, в продакшене нужен правильный SSL
-            )
-            return Response(response.json(), status=response.status_code)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# Настройка SSL
+os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-class ChatCompletionView(APIView):
-    def post(self, request):
-        serializer = ChatCompletionSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+def ask_gigachat(activity):
+    """Запрос к GigaChat API для поиска компаний по тематике"""
+    if not activity or activity == 'не указана':
+        return None
+    
+    try:
+        url = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
         
-        token = request.auth  # Если используете DRF authentication
+        prompt = (
+            f"Найди 5 известных компаний или сообществ ВКонтакте в тематике '{activity}'. "
+            "Предоставь ответ в формате: "
+            "1. Название компании (ссылка vk.com/example) - краткое описание\n"
+            "2. Название компании (ссылка vk.com/example) - краткое описание\n"
+            "..."
+        )
+        
+        payload = json.dumps({
+            "model": "GigaChat",
+            "messages": [{
+                "role": "user", 
+                "content": prompt
+            }],
+            "temperature": 0.7,
+            "max_tokens": 500
+        })
         
         headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'Authorization': f'Bearer {token}',
-            'X-Request-ID': str(uuid.uuid4()),
-            'X-Session-ID': str(uuid.uuid4())
+            'Authorization': f'Bearer {settings.GIGACHAT_TOKEN}'
         }
+
+        response = requests.post(
+            url, 
+            headers=headers, 
+            data=payload, 
+            verify=False,
+            timeout=15
+        )
+        response.raise_for_status()
         
-        try:
-            response = requests.post(
-                'https://gigachat.devices.sberbank.ru/api/v1/chat/completions',
-                headers=headers,
-                json=serializer.validated_data
-            )
-            return Response(response.json(), status=response.status_code)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return response.json().get('choices', [{}])[0].get('message', {}).get('content', '')
+    
+    except Exception as e:
+        print(f"GigaChat Error: {str(e)}")
+        return None
+
+def group_info(request):
+    context = {}
+    
+    if request.method == 'POST':
+        group_name = request.POST.get('group_name', '').strip()
+        if group_name:
+            try:
+                # Основной запрос информации о группе
+                response = requests.get(
+                    'https://api.vk.com/method/groups.getById',
+                    params={
+                        'group_id': quote(group_name),
+                        'fields': 'members_count,description,photo_200,activity,status',
+                        'access_token': settings.VK_SERVICE_TOKEN,
+                        'v': '5.199'
+                    },
+                    timeout=10
+                )
+                data = response.json()
+
+                if 'error' in data:
+                    context['error'] = f"Ошибка VK API: {data['error']['error_msg']}"
+                elif not data.get('response', {}).get('groups'):
+                    context['error'] = f"Группа '{group_name}' не найдена"
+                else:
+                    group = data['response']['groups'][0]
+                    context['group'] = {
+                        'name': group.get('name'),
+                        'screen_name': group.get('screen_name'),
+                        'members': f"{group.get('members_count', 0):,}".replace(',', ' '),
+                        'activity': group.get('activity', 'не указана'),
+                        'description': group.get('description', 'нет описания'),
+                        'photo': group.get('photo_200'),
+                        'url': f"https://vk.com/{group.get('screen_name')}",
+                        'status': group.get('status', '')
+                    }
+                    context['searched_name'] = group_name
+                    
+                    # Запрашиваем похожие компании у GigaChat
+                    if context['group']['activity'] != 'не указана':
+                        context['gigachat_recommendations'] = ask_gigachat(context['group']['activity'])
+            
+            except Exception as e:
+                context['error'] = f"Произошла ошибка: {str(e)}"
+        else:
+            context['error'] = 'Введите название группы'
+    
+    return render(request, 'group_info.html', context)
