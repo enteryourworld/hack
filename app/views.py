@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 import requests
 import json
 from django.conf import settings
@@ -9,10 +9,51 @@ from urllib3.exceptions import InsecureRequestWarning
 import asyncio
 from telethon.sync import TelegramClient
 from telethon.tl.functions.channels import GetFullChannelRequest
+from .models import VKTheme
+from datetime import datetime, timedelta
 
 # Настройка SSL
 os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+def collect_vk_themes(request):
+    if request.method == 'POST':
+        group_name = request.POST.get('group_name', '').strip()
+        if group_name:
+            try:
+                response = requests.get(
+                    'https://api.vk.com/method/groups.getById',
+                    params={
+                        'group_id': quote(group_name),
+                        'fields': 'activity',
+                        'access_token': settings.VK_SERVICE_TOKEN,
+                        'v': '5.199'
+                    },
+                    timeout=10
+                )
+                data = response.json()
+
+                if 'response' in data and data['response']['groups']:
+                    activity = data['response']['groups'][0].get('activity', 'не указана')
+                    if activity != 'не указана':
+                        theme, created = VKTheme.objects.get_or_create(name=activity)
+                        theme.popularity += 1
+                        theme.save()
+                        return redirect('popular_themes')
+            
+            except Exception as e:
+                print(f"Error: {str(e)}")
+    
+    return render(request, 'collect_theme.html')
+
+def popular_themes(request):
+    # Топ-10 популярных тематик за последний месяц
+    time_threshold = datetime.now() - timedelta(days=30)
+    themes = VKTheme.objects.filter(
+        last_updated__gte=time_threshold
+    ).order_by('-popularity')[:10]
+    
+    return render(request, 'popular_themes.html', {'themes': themes})
 
 def get_vk_data(group_name):
     """Получение данных VK (оригинальная функция без изменений)"""
@@ -94,8 +135,8 @@ def ask_gigachat(context, source):
         if source == 'vk':
             prompt = (
                 f"Найди 5 известных компаний ВКонтакте в тематике '{context['group']['activity']}'. "
-                "Формат: 1. Название (vk.com/ссылка) - описание\n"
-                "2. Название (vk.com/ссылка) - описание\n..."
+                "Формат: 1.Ссылка:(vk.com/ссылка)/подробное писание\n"
+                "2. Ссылка:(vk.com/ссылка)/подробное писание\n..."
             )
         else:
             prompt = (
@@ -128,31 +169,81 @@ def ask_gigachat(context, source):
     except Exception as e:
         print(f"GigaChat Error: {str(e)}")
         return None
-
+import logger
 def group_info(request):
-    """Основная view (адаптирована под оригинальный group_info.html)"""
-    context = {}
-    
+    """Основная view-функция для анализа групп VK и Telegram"""
+    # Инициализируем контекст с None для всех возможных переменных
+    context = {
+        'error': None,
+        'group': None,
+        'searched_name': None,
+        'gigachat_recommendations': None
+    }
+
     if request.method == 'POST':
-        source = request.POST.get('source', 'vk')
-        name = request.POST.get('group_name', '').strip()
-        
-        if name:
+        try:
+            # Получаем параметры из формы
+            source = request.POST.get('source', 'vk')
+            name = request.POST.get('group_name', '').strip()
+            
+            # Валидация ввода
+            if not name:
+                raise ValueError("Пожалуйста, введите название группы/канала")
+            
+            # Получаем данные в зависимости от источника
             if source == 'vk':
                 data = get_vk_data(name)
-            else:
-                data = get_telegram_data(name)
-            
-            if data and 'error' not in data:
-                context['group'] = data
-                context['searched_name'] = name
                 
-                # Запрашиваем рекомендации если есть тематика (VK) или посты (Telegram)
-                if (source == 'vk' and data['activity'] != 'не указана') or (source == 'telegram' and data['last_posts']):
-                    context['gigachat_recommendations'] = ask_gigachat(context, source)
+                # Проверка ответа от VK API
+                if not data or 'error' in data:
+                    error_msg = data.get('error', 'Не удалось получить данные группы VK')
+                    raise ValueError(error_msg)
+                
+                # Дополнительная проверка для VK
+                if data['activity'] == 'не указана':
+                    context['warning'] = "Тематика группы не указана"
+                
+            elif source == 'telegram':
+                data = get_telegram_data(name)
+                
+                # Проверка ответа от Telegram
+                if not data:
+                    raise ValueError("Не удалось получить данные Telegram-канала")
+                
+                # Проверка наличия постов
+                if not data.get('last_posts'):
+                    context['warning'] = "В канале нет публичных сообщений"
             else:
-                context['error'] = data.get('error', 'Не удалось получить данные')
-        else:
-            context['error'] = 'Введите название'
+                raise ValueError("Неподдерживаемый источник данных")
+
+            # Заполняем контекст
+            context['group'] = data
+            context['searched_name'] = name
+            context['source'] = source
+
+            # Получаем рекомендации если есть данные для анализа
+            if (source == 'vk' and data.get('activity') != 'не указана') or \
+               (source == 'telegram' and data.get('last_posts')):
+                
+                try:
+                    recommendations = ask_gigachat(context, source)
+                    if recommendations:
+                        context['gigachat_recommendations'] = recommendations
+                    else:
+                        context['warning'] = "Не удалось получить рекомендации"
+                except Exception as e:
+                    logger.error(f"GigaChat error: {str(e)}")
+                    context['warning'] = "Ошибка при анализе данных"
+
+        except requests.exceptions.RequestException as e:
+            context['error'] = f"Ошибка соединения: {str(e)}"
+            logger.error(f"Network error: {str(e)}")
+        
+        except ValueError as e:
+            context['error'] = str(e)
+        
+        except Exception as e:
+            context['error'] = "Произошла непредвиденная ошибка"
+            logger.exception("Unexpected error in group_info:")
     
     return render(request, 'group_info.html', context)
