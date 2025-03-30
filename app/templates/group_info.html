@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Поиск групп ВКонтакте</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+
+        h1 {
+            color: #2a5885;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .search-container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            margin-bottom: 30px;
+        }
+
+        .search-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 12px 15px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .search-input:focus {
+            border-color: #5181b8;
+        }
+
+        .search-button {
+            background-color: #5181b8;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        .search-button:hover {
+            background-color: #3a6ea5;
+        }
+
+        .examples {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .error-message {
+            background-color: #ffebee;
+            color: #d32f2f;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #d32f2f;
+        }
+
+        .group-card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            margin-bottom: 30px;
+        }
+
+        .group-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .group-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 20px;
+            border: 1px solid #eee;
+        }
+
+        .group-title {
+            margin: 0;
+            color: #2a5885;
+        }
+
+        .group-meta {
+            color: #666;
+            margin: 5px 0;
+            font-size: 15px;
+        }
+
+        .group-activity {
+            display: inline-block;
+            background-color: #e5ebf1;
+            color: #2a5885;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+
+        .group-description {
+            margin: 20px 0;
+            line-height: 1.7;
+            white-space: pre-line;
+        }
+
+        .group-link {
+            display: inline-block;
+            color: #5181b8;
+            text-decoration: none;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .group-link:hover {
+            text-decoration: underline;
+        }
+
+        .similar-groups {
+            background-color: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .similar-title {
+            color: #2a5885;
+            margin-top: 0;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .similar-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .similar-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .similar-item:hover {
+            background-color: #f5f7fa;
+        }
+
+        .similar-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 15px;
+        }
+
+        .similar-info {
+            flex: 1;
+        }
+
+        .similar-name {
+            font-weight: bold;
+            margin-bottom: 3px;
+            color: #2a5885;
+        }
+
+        .similar-members {
+            font-size: 13px;
+            color: #666;
+        }
+
+        @media (max-width: 600px) {
+            .search-form {
+                flex-direction: column;
+            }
+            
+            .group-header {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .group-avatar {
+                margin-right: 0;
+                margin-bottom: 15px;
+            }
+            
+            .similar-list {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Поиск групп ВКонтакте</h1>
+    
+    <div class="search-container">
+        <form method="POST" class="search-form">
+            {% csrf_token %}
+            <input type="text" 
+                   name="group_name" 
+                   class="search-input" 
+                   placeholder="Введите ID или короткое имя группы" 
+                   value="{{ searched_name|default:'' }}" 
+                   required>
+            <button type="submit" class="search-button">Найти</button>
+        </form>
+        <div class="examples">
+            Примеры: mts, sberbank, apple, 1 (для VK API)
+        </div>
+    </div>
+
+    {% if error %}
+        <div class="error-message">
+            {{ error }}
+        </div>
+    {% endif %}
+
+    {% if group %}
+        <div class="group-card">
+            <div class="group-header">
+                {% if group.photo %}
+                    <img src="{{ group.photo }}" alt="{{ group.name }}" class="group-avatar">
+                {% endif %}
+                <div>
+                    <h2 class="group-title">{{ group.name }}</h2>
+                    <div class="group-meta">
+                        @{{ group.screen_name }} • {{ group.members }} участников
+                    </div>
+                    {% if group.activity %}
+                        <div class="group-activity">
+                            {{ group.activity }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            {% if group.status %}
+                <div class="group-description">
+                    <strong>Статус:</strong> {{ group.status }}
+                </div>
+            {% endif %}
+            
+            {% if group.description %}
+                <div class="group-description">
+                    {{ group.description }}
+                </div>
+            {% endif %}
+            
+            <a href="{{ group.url }}" target="_blank" class="group-link">
+                Перейти в группу ВКонтакте →
+            </a>
+        </div>
+        
+        
+        {% if gigachat_recommendations %}
+            <div class="similar-groups">
+                <h3 class="similar-title">Похожие компании по тематике "{{ group.activity }}"</h3>
+                <div class="ai-response">
+                    {{ gigachat_recommendations|linebreaks }}
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
+
+</body>
+</html>
