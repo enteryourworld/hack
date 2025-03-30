@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Поиск групп ВКонтакте</title>
+    <title>Анализ сообществ</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -32,6 +32,15 @@
         .search-form {
             display: flex;
             gap: 10px;
+        }
+
+        .source-selector {
+            padding: 12px 15px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background-color: white;
+            cursor: pointer;
         }
 
         .search-input {
@@ -67,6 +76,12 @@
             margin-top: 15px;
             font-size: 14px;
             color: #666;
+            display: flex;
+            gap: 15px;
+        }
+
+        .example-block {
+            flex: 1;
         }
 
         .error-message {
@@ -134,10 +149,32 @@
             text-decoration: none;
             font-weight: bold;
             margin-top: 10px;
+            transition: color 0.3s;
         }
 
         .group-link:hover {
+            color: #3a6ea5;
             text-decoration: underline;
+        }
+
+        .source-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        .vk-badge {
+            background-color: #0077ff;
+            color: white;
+        }
+
+        .tg-badge {
+            background-color: #0088cc;
+            color: white;
         }
 
         .similar-groups {
@@ -155,47 +192,34 @@
             border-bottom: 1px solid #eee;
         }
 
-        .similar-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 15px;
+        .ai-response {
+            white-space: pre-line;
+            line-height: 1.7;
         }
 
-        .similar-item {
-            display: flex;
-            align-items: center;
-            padding: 10px;
-            border-radius: 6px;
-            transition: background-color 0.2s;
+        .ai-response a {
+            color: #5181b8;
             text-decoration: none;
-            color: inherit;
         }
 
-        .similar-item:hover {
-            background-color: #f5f7fa;
+        .ai-response a:hover {
+            text-decoration: underline;
         }
 
-        .similar-avatar {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            object-fit: cover;
-            margin-right: 15px;
+        .last-posts {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
         }
 
-        .similar-info {
-            flex: 1;
+        .post {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px dashed #eee;
         }
 
-        .similar-name {
-            font-weight: bold;
-            margin-bottom: 3px;
-            color: #2a5885;
-        }
-
-        .similar-members {
-            font-size: 13px;
-            color: #666;
+        .post:last-child {
+            border-bottom: none;
         }
 
         @media (max-width: 600px) {
@@ -213,28 +237,40 @@
                 margin-bottom: 15px;
             }
             
-            .similar-list {
-                grid-template-columns: 1fr;
+            .examples {
+                flex-direction: column;
+                gap: 5px;
             }
         }
     </style>
 </head>
 <body>
-    <h1>Поиск групп ВКонтакте</h1>
+    <h1>Анализ сообществ</h1>
     
     <div class="search-container">
         <form method="POST" class="search-form">
             {% csrf_token %}
+            <select name="source" class="source-selector">
+                <option value="vk" {% if group.source == 'vk' %}selected{% endif %}>ВКонтакте</option>
+                <option value="telegram" {% if group.source == 'telegram' %}selected{% endif %}>Telegram</option>
+            </select>
             <input type="text" 
                    name="group_name" 
                    class="search-input" 
-                   placeholder="Введите ID или короткое имя группы" 
+                   placeholder="Введите ID или имя сообщества" 
                    value="{{ searched_name|default:'' }}" 
                    required>
-            <button type="submit" class="search-button">Найти</button>
+            <button type="submit" class="search-button">Анализировать</button>
         </form>
         <div class="examples">
-            Примеры: mts, sberbank, apple, 1 (для VK API)
+            <div class="example-block">
+                <strong>Примеры для VK:</strong><br>
+                mts, sberbank, apple, 1
+            </div>
+            <div class="example-block">
+                <strong>Примеры для Telegram:</strong><br>
+                tjournal, meduzalive, varlamov_news
+            </div>
         </div>
     </div>
 
@@ -251,9 +287,17 @@
                     <img src="{{ group.photo }}" alt="{{ group.name }}" class="group-avatar">
                 {% endif %}
                 <div>
-                    <h2 class="group-title">{{ group.name }}</h2>
+                    <h2 class="group-title">
+                        {{ group.name }}
+                        <span class="source-badge {% if group.source == 'vk' %}vk-badge{% else %}tg-badge{% endif %}">
+                            {% if group.source == 'vk' %}VK{% else %}Telegram{% endif %}
+                        </span>
+                    </h2>
                     <div class="group-meta">
-                        @{{ group.screen_name }} • {{ group.members }} участников
+                        @{{ group.screen_name }}
+                        {% if group.members %}
+                            • {{ group.members }} участников
+                        {% endif %}
                     </div>
                     {% if group.activity %}
                         <div class="group-activity">
@@ -274,22 +318,32 @@
                     {{ group.description }}
                 </div>
             {% endif %}
+
+            {% if group.last_posts %}
+                <div class="last-posts">
+                    <h3>Последние сообщения:</h3>
+                    {% for post in group.last_posts %}
+                        <div class="post">{{ post }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
             
             <a href="{{ group.url }}" target="_blank" class="group-link">
-                Перейти в группу ВКонтакте →
+                Перейти в {% if group.source == 'vk' %}группу ВКонтакте{% else %}Telegram-канал{% endif %} →
             </a>
         </div>
         
-        
         {% if gigachat_recommendations %}
             <div class="similar-groups">
-                <h3 class="similar-title">Похожие компании по тематике "{{ group.activity }}"</h3>
+                <h3 class="similar-title">
+                    Похожие {% if group.source == 'vk' %}компании ВКонтакте{% else %}Telegram-каналы{% endif %}
+                    {% if group.activity %}по тематике "{{ group.activity }}"{% endif %}
+                </h3>
                 <div class="ai-response">
                     {{ gigachat_recommendations|linebreaks }}
                 </div>
             </div>
         {% endif %}
     {% endif %}
-
 </body>
 </html>
