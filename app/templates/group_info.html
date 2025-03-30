@@ -275,10 +275,10 @@
     </div>
 
     {% if error %}
-        <div class="error-message">
-            {{ error }}
-        </div>
-    {% endif %}
+    <div class="alert alert-danger">
+        {{ error }}
+    </div>
+{% endif %}
 
     {% if group %}
         <div class="group-card">
@@ -345,5 +345,30 @@
             </div>
         {% endif %}
     {% endif %}
+    <!-- <script>
+          const response = document.querySelector(".ai-response");
+          const resChild = response.childNodes;
+          if (resChild) {
+                    const regex = /^\d+\..+$/;
+                    let cnt = 1;
+                    resChild.forEach((e, i)=>{
+                    if(i == 1) e.remove()
+                    if(regex.test(e.textContent)){
+                              const text = e.textContent.replaceAll("*", "").replace(`${cnt}.`, "");
+                              console.log(text, cnt)
+                              cnt++;
+                              const name = text.split(" - Ссылка")[0];
+                              const link = text.split("Ссылка: ")[1].split(" - Описание")[0];
+                              const desc = text.split("Описание: ")[1]
+                              e.outerHTML = `<div>
+                                        <a href="https://${link}">
+                                                  <h3>${name}</h3>
+                                                  <p>${desc}</p>
+                                        </a>
+                                        </div>`
+                    }
+          })
+          }
+    </script> -->
 </body>
 </html>
